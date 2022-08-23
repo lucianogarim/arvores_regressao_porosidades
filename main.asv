@@ -1,0 +1,73 @@
+% Algoritmo de Árvores de Regressão
+clear;
+clc;
+
+%% Carregamento dos dados de poços
+myfiles = dir('C:\Users\lucia\OneDrive\Área de Trabalho\Unisinos\Projeto Sapinhoá\Porosidades_3D\Scripts\Teste_regressão_porosidades_final\Pocos_atrib_poros');
+filenames={myfiles(:).name}';
+filefolders={myfiles(:).folder}';
+csvfiles=filenames(endsWith(filenames,'.csv'));
+csvfolders=filefolders(endsWith(filenames,'.csv'));
+files=fullfile(csvfolders,csvfiles);
+
+% Seleciona apenas os conjuntos validos e remove valores faltantes
+dados = [];
+for i=3:size(filenames,1)
+    dados = vertcat(dados, importacao(filenames{i},[1,inf]));
+end
+dados(sum(isnan(dados), 2) > 0, :) = []; 
+
+%% Separa o conjunto de atributos e variável preditora
+poro_med = dados(2:end,end);%movmean(dados(2:end,end),200);
+dados = dados(2:end,2:end-1);
+%dados = rmoutliers(dados(2:end,2:end));
+
+%% Carregamento dos dados de mapas
+myfiles = dir('C:\Users\lucia\OneDrive\Área de Trabalho\Unisinos\Projeto Sapinhoá\Porosidades_3D\Scripts\Teste_regressão_porosidades_final\Atributos');
+filenames={myfiles(:).name}';
+filefolders={myfiles(:).folder}';
+csvfiles=filenames(endsWith(filenames,'.txt'));
+csvfolders=filefolders(endsWith(filenames,'.txt'));
+files=fullfile(csvfolders,csvfiles);
+
+% Seleciona apenas os conjuntos validos e remove valores faltantes
+atributos = [];
+dados_predicao = [];
+for i=3:size(filenames,1)
+    atributos(:,:,i) = importacaoatributos(filenames{i},[1,inf]);
+    aux = atributos(:,:,i);
+    dados_predicao = horzcat(dados_predicao,aux(:));
+end
+
+%% Dados de predição organizados
+B = [dados_predicao(:,1) dados_predicao(:,3) dados_predicao(:,4) dados_predicao(:,2) dados_predicao(:,end)];
+dados_predicao = B;
+
+% remove os outliers de todo dataset
+dados = [dados poro_med];
+dados = rmoutliers(dados,'median');
+%dados = dados(1:30000,:);
+
+% PrePurging
+% tolS: Tolerate(Min) decréscimo de variância
+% tolN: Tolerate(Min) número de nós no dataset
+regPurging = struct('tolS', 0.1, 'tolN', 100);
+
+% 'Y' para sim ou 'N' para não
+desenhar_arvore = 'N';
+salvar_arvore = 'Y'; 
+validacao_cruzada = 'N'; 
+
+% Parâmetro de validação cruzada
+kfold = 5;
+
+% Função principal
+arvore_treinada = regressao(dados, regPurging, kfold, desenhar_arvore, salvar_arvore, validacao_cruzada);
+
+figure(2)
+ypred = predicao_arvore( arvore_treinada,dados_predicao );
+final = reshape(ypred,[820,486]);
+surf(final, 'EdgeColor','none')
+axis image
+
+[cnt_unique, unique_a] = hist(final,unique(final));
